@@ -1,0 +1,1 @@
+implementing of the allocator from lecture http://dmitrysoshnikov.com/compilers/writing-a-memory-allocator/ with completing of the all given tasks.

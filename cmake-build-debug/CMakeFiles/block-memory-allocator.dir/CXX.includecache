@@ -1,0 +1,32 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/panda/git/block-memory-allocator/src/allocator.cpp
+iostream
+-
+allocator.h
+/home/panda/git/block-memory-allocator/src/allocator.h
+cmath
+-
+
+/home/panda/git/block-memory-allocator/src/allocator.h
+cstdint
+-
+unistd.h
+-
+utility
+-
+
+/home/panda/git/block-memory-allocator/src/main.cpp
+iostream
+-
+allocator.h
+/home/panda/git/block-memory-allocator/src/allocator.h
+assert.h
+-
+
