@@ -1,1 +1,0 @@
-/usr/bin/g++   -g -DDEBUG -D_DEBUG -ggdb3 -g   CMakeFiles/block-memory-allocator.dir/src/allocator.cpp.o CMakeFiles/block-memory-allocator.dir/src/main.cpp.o  -o block-memory-allocator 
