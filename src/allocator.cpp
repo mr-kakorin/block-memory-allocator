@@ -85,6 +85,7 @@ void reset_heap() {
 void init(search_mode_enum mode) {
   search_mode = mode;
   reset_heap();
+  //TODO make all runtime if (search_mode) checks determined here via different functions
   switch (search_mode) {
     case search_mode_enum::first_fit:
       find_block = first_fit_search;
@@ -198,12 +199,12 @@ Block *coalesce(Block *block) {
   block->next = next_block->next;
   block->size += next_block->size;
   if (search_mode == search_mode_enum::free_list) {
-    //they both are free
+    //union of two blocks to one
     --free_list_size;
+    //they both are free and becoming one
     block->next_free = next_block->next_free;
     if (next_block->next_free)
       next_block->next_free->prev_free = block;
-
   }
   return block;
 }
@@ -227,6 +228,7 @@ void free(word_t *data) {
     }
     block->prev_free = top;
     top_free = block;
+    //increase number of free blocks;
     ++free_list_size;
   }
 }
@@ -245,6 +247,8 @@ Block *split(Block *block, size_t size) {
     block_free->prev_free = top_free;
     top_free->next_free = block_free;
     top_free = block_free;
+    //we increase here because block will be used later in free_list_search
+    //where this value will be decremented
     ++free_list_size;
   }
   return block;
