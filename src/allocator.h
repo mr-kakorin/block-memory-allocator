@@ -58,6 +58,13 @@ static Block *heap_start_free = nullptr;
 static auto top_free = heap_start_free;
 static size_t heap_size = 0;
 static size_t free_list_size = 0;
+
+
+/**
+ * Tries to find a block that fits.
+ */
+static Block *(*find_block)(size_t size);
+
 /**
  * Previously found block. Updated in `next_fit`.
  */
@@ -94,6 +101,7 @@ Block *first_fit_search(size_t size);
 const Block *get_search_start();
 
 size_t get_free_list_size();
+
 /**
  * Mode for searching a free block.
  */
@@ -128,11 +136,6 @@ void init(search_mode_enum mode);
 Block *next_fit_search(size_t size);
 
 Block *best_fit_search(size_t size);
-
-/**
- * Tries to find a block that fits.
- */
-Block *find_block(size_t size);
 
 /**
  * Splits the block on two, returns the pointer to the smaller sub-block.

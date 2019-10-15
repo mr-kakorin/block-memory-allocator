@@ -85,6 +85,20 @@ void reset_heap() {
 void init(search_mode_enum mode) {
   search_mode = mode;
   reset_heap();
+  switch (search_mode) {
+    case search_mode_enum::first_fit:
+      find_block = first_fit_search;
+      break;
+    case search_mode_enum::next_fit:
+      find_block = next_fit_search;
+      break;
+    case search_mode_enum::best_fit:
+      find_block = best_fit_search;
+      break;
+    case search_mode_enum::free_list:
+      find_block = free_list_search;
+      break;
+  }
 }
 
 Block *next_fit_search(size_t size) {
@@ -109,19 +123,6 @@ Block *next_fit_search(size_t size) {
 
 const Block *get_search_start() {
   return search_start;
-}
-
-Block *find_block(size_t size) {
-  switch (search_mode) {
-    case search_mode_enum::first_fit:
-      return first_fit_search(size);
-    case search_mode_enum::next_fit:
-      return next_fit_search(size);
-    case search_mode_enum::best_fit:
-      return best_fit_search(size);
-    case search_mode_enum::free_list:
-      return free_list_search(size);
-  }
 }
 
 Block *free_list_search(size_t size) {
