@@ -38,7 +38,9 @@ struct Block {
    * Next block in the list.
    */
   Block *next;
-  Block *prev;
+
+  Block *next_free;
+  Block *prev_free;
   // -------------------------------------
   // 2. User data
 
@@ -54,7 +56,8 @@ static auto top = heap_start;
 
 static Block *heap_start_free = nullptr;
 static auto top_free = heap_start_free;
-
+static size_t heap_size = 0;
+static size_t free_list_size = 0;
 /**
  * Previously found block. Updated in `next_fit`.
  */
@@ -86,10 +89,11 @@ Block *request_mem_from_OS(size_t size);
 
 void free(word_t *data);
 
-Block *first_fit(size_t size);
+Block *first_fit_search(size_t size);
 
 const Block *get_search_start();
 
+size_t get_free_list_size();
 /**
  * Mode for searching a free block.
  */
@@ -103,12 +107,12 @@ enum struct search_mode_enum {
 /**
  * Current search mode.
  */
-static auto searchMode = search_mode_enum::first_fit;
+static auto search_mode = search_mode_enum::first_fit;
 
 /**
  * Reset the heap to the original position.
  */
-void resetHeap();
+void reset_heap();
 
 /**
  * Initializes the heap, and the search mode.
@@ -121,9 +125,9 @@ void init(search_mode_enum mode);
  * Returns the next free block which fits the size.
  * Updates the `search_start` of success.
  */
-Block *next_fit(size_t size);
+Block *next_fit_search(size_t size);
 
-Block *best_fit(size_t size);
+Block *best_fit_search(size_t size);
 
 /**
  * Tries to find a block that fits.
@@ -155,6 +159,6 @@ inline bool can_coalesce(Block *block);
  */
 Block *coalesce(Block *block);
 
-Block *free_list(size_t size);
+Block *free_list_search(size_t size);
 
 #endif //UNTITLED_ALLOCATOR_H

@@ -14,7 +14,7 @@ word_t *alloc(size_t size) {
   size = align(size);
 
   if (auto block = find_block(size)) {                   // (1)
-    return list_allocate(block, size)->data;
+    return block->data;
   }
 
   auto block = request_mem_from_OS(size);
@@ -31,7 +31,6 @@ word_t *alloc(size_t size) {
   if (top != nullptr) {
     top->next = block;
   }
-  block->prev = top;
   top = block;
 
   // User payload:
@@ -44,7 +43,7 @@ word_t *alloc(size_t size) {
  *
  * Returns the first free block which fits the size.
  */
-Block *first_fit(size_t size) {
+Block *first_fit_search(size_t size) {
   auto block = heap_start;
 
   while (block != nullptr) {
@@ -55,7 +54,7 @@ Block *first_fit(size_t size) {
     }
 
     // Found the block:
-    return block;
+    return list_allocate(block, size);
   }
 
   return nullptr;
@@ -65,7 +64,7 @@ inline size_t calc_alloc_size(size_t size) {
   return size + sizeof(Block) - sizeof(std::declval<Block>().data);
 }
 
-void resetHeap() {
+void reset_heap() {
   // Already reset.
   if (heap_start == nullptr) {
     return;
@@ -77,14 +76,18 @@ void resetHeap() {
   heap_start = nullptr;
   top = nullptr;
   search_start = nullptr;
+  if (search_mode == search_mode_enum::free_list) {
+    heap_start_free = nullptr;
+    top_free = nullptr;
+  }
 }
 
 void init(search_mode_enum mode) {
-  searchMode = mode;
-  resetHeap();
+  search_mode = mode;
+  reset_heap();
 }
 
-Block *next_fit(size_t size) {
+Block *next_fit_search(size_t size) {
   if (!search_start)
     search_start = heap_start;
 
@@ -98,7 +101,7 @@ Block *next_fit(size_t size) {
     }
     search_start = block;
     // Found the block:
-    return block;
+    return list_allocate(block, size);
   }
 
   return nullptr;
@@ -109,62 +112,59 @@ const Block *get_search_start() {
 }
 
 Block *find_block(size_t size) {
-  switch (searchMode) {
+  switch (search_mode) {
     case search_mode_enum::first_fit:
-      return first_fit(size);
+      return first_fit_search(size);
     case search_mode_enum::next_fit:
-      return next_fit(size);
+      return next_fit_search(size);
     case search_mode_enum::best_fit:
-      return best_fit(size);
+      return best_fit_search(size);
     case search_mode_enum::free_list:
-      return free_list(size);
+      return free_list_search(size);
   }
 }
 
-Block *free_list(size_t size) {
-  auto block = heap_start;
+Block *free_list_search(size_t size) {
+  auto block = heap_start_free;
   while (block != nullptr) {
     // O(n) search.
     if (block->size < size) {
-      block = block->next;
+      block = block->next_free;
       continue;
     }
 
     //removing from list
-    if (block->prev)
-      block->prev->next = block->next;
+    if (block->prev_free)
+      block->prev_free->next_free = block->next_free;
 
-    if (block->next)
-      block->next->prev = block->prev;
-
+    if (block->next_free)
+      block->next_free->prev_free = block->prev_free;
+    --free_list_size;
     // Found the block:
     return list_allocate(block, size);
   }
   return nullptr;
 }
 
-Block *best_fit(size_t size) {
-
+Block *best_fit_search(size_t size) {
   auto block = heap_start;
-
-  size_t min_difference = UINTMAX_MAX;
-  Block *bestfit = nullptr;
+  Block *best_fit = nullptr;
   while (block != nullptr) {
     // O(n) search.
     if (block->used || block->size < size) {
       block = block->next;
       continue;
     }
-    if (block->size - size < min_difference) {
-      bestfit = block;
-      min_difference = block->size - size;
+    if (!best_fit || block->size < best_fit->size) {
+      best_fit = block;
       block = block->next;
     }
     // Found the block:
     //return block;
   }
-
-  return bestfit;
+  if (best_fit)
+    return list_allocate(best_fit, size);
+  return best_fit;
 }
 
 Block *request_mem_from_OS(size_t size) {
@@ -196,6 +196,15 @@ Block *coalesce(Block *block) {
   auto next_block = block->next;
   block->next = next_block->next;
   block->size += next_block->size;
+  if (search_mode == search_mode_enum::free_list) {
+    //they both are free
+    --free_list_size;
+    block->next_free = next_block->next_free;
+    if (next_block->next_free)
+      next_block->next_free->prev_free = block;
+
+  }
+  return block;
 }
 
 /**
@@ -207,13 +216,17 @@ void free(word_t *data) {
     block = coalesce(block);
   }
   block->used = false;
-  if (searchMode == search_mode_enum::free_list) {
+  if (search_mode == search_mode_enum::free_list) {
     //adding to free list
-    if (block->prev)
-      block->prev->next = block;
-
-    if (block->next)
-      block->next->prev = block;
+    if (heap_start_free == nullptr) {
+      heap_start_free = block;
+    }
+    if (top_free != nullptr) {
+      top_free->next_free = block;
+    }
+    block->prev_free = top;
+    top_free = block;
+    ++free_list_size;
   }
 }
 
@@ -222,20 +235,29 @@ void free(word_t *data) {
  */
 Block *split(Block *block, size_t size) {
   auto space_left = block->size - size;
-  Block *block_left = (Block *) (block + size);
-  block_left->next = block->next;
-  block->next = block_left;
-  block_left->size = space_left;
-  block_left->used = false;
+  Block *block_free = (Block *) (block + size);
+  block_free->next = block->next;
+  block->next = block_free;
+  block_free->size = space_left;
+  block_free->used = false;
+  if (search_mode == search_mode_enum::free_list) {
+    block_free->prev_free = top_free;
+    top_free->next_free = block_free;
+    top_free = block_free;
+    ++free_list_size;
+  }
   return block;
+}
+
+size_t get_free_list_size() {
+  return free_list_size;
 }
 
 /**
  * Whether this block can be split.
  */
 inline bool can_split(Block *block, size_t size) {
-  auto space_left = block->size - size;
-  return space_left > size && align(space_left) - space_left == 0;
+  return block->size - size >= sizeof(Block);
 }
 
 /**

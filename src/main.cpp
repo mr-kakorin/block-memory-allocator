@@ -82,5 +82,20 @@ int main() {
   // Reuse 64, splitting it to 16, and 48
   z3 = alloc(16);
   assert(get_header(z3) == get_header(z1));
+
+  init(search_mode_enum::free_list);
+
+  alloc(8);
+  alloc(8);
+  auto v1 = alloc(16);
+  alloc(8);
+
+  free(v1);
+  assert(get_free_list_size() == 1);
+
+  auto v2 = alloc(16);
+  assert(get_free_list_size() == 0);
+  assert(get_header(v1) == get_header(v2));
+
   return 0;
 }
