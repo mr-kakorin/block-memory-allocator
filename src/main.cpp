@@ -120,6 +120,8 @@ int main() {
   auto s6 = alloc(5);
   assert(get_header(s6) == get_header(s1));
   free(s2);
+  auto s7 = alloc(8);
+  assert(get_header(s7) == get_header(s2));
   free(s3);
 
   puts("\nAll assertions passed!\n");

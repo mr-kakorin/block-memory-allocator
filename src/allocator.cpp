@@ -6,27 +6,6 @@
 #include "allocator.h"
 
 /**
- * Allocates a block from the list, splitting if needed.
- */
-inline Block *list_allocate_segregated(Block *block, size_t size) {
-  block->used = true;
-  return block;
-}
-
-
-Block *list_allocate_default(Block *block, size_t size) {
-// Split the larger block, reusing the free part.
-  if (can_split(block, size)) {
-    block = split(block, size);
-  }
-
-  block->used = true;
-  block->size = size;
-
-  return block;
-}
-
-/**
  * Splits the block on two, returns the pointer to the smaller sub-block.
  */
 Block *split_default(Block *block, size_t size) {
@@ -51,7 +30,7 @@ Block *split_free_list(Block *block, size_t size) {
   top_free = block_free;
   //we increase here because block will be used later in free_list_search
   //where this value will be decremented
-  ++(*free_list_size);
+  ++free_list_size;
   return block;
 }
 
@@ -81,7 +60,7 @@ void free_free_list(word_t *data) {
   block->prev_free = top_free;
   top_free = block;
   //increase number of free blocks;
-  ++(*free_list_size);
+  ++free_list_size;
 }
 
 void free_segregated(word_t *data) {
@@ -118,7 +97,7 @@ Block *coalesce_free_list(Block *block) {
   block->next = next_block->next;
   block->size += next_block->size;
   //union of two blocks to one
-  --(*free_list_size);
+  --free_list_size;
   //they both are free and becoming one
   block->next_free = next_block->next_free;
   if (next_block->next_free)
@@ -205,20 +184,29 @@ inline int get_bucket(size_t size) {
 Block *segregated_fit_search(size_t size) {
   // Bucket number based on size.
   auto bucket = get_bucket(size);
-  auto original_heap_start_free = heap_start_free;
-  auto original_heap_top_free = top_free;
-  auto original_free_list_size = free_list_size;
-  // Init the search.
-  heap_start_free = segregated_starts_free[bucket];
-  top_free = segregated_tops_free[bucket];
-  free_list_size = free_lists_size[bucket];
-  // Use first-fit here, but can be any:
-  auto block = free_list_search(size);
+  auto block = segregated_starts_free[bucket];
+  while (block != nullptr) {
+    // O(n) search.
+    if (block->size < size) {
+      block = block->next_free;
+      continue;
+    }
 
-  heap_start_free = original_heap_start_free;
-  top_free = original_heap_top_free;
-  free_list_size = original_free_list_size;
-  return block;
+    //removing from free list
+    if (block->prev_free)
+      block->prev_free->next_free = block->next_free;
+    else if (block->next_free)
+      block->next_free->prev_free = block->prev_free;
+    else {
+      segregated_starts_free[bucket] = nullptr;
+      segregated_tops_free[bucket] = nullptr;
+    }
+    --free_lists_size[bucket];
+    // Found the block:
+    block->used = true;
+    return block;
+  }
+  return nullptr;
 }
 
 Block **get_segregated_starts() {
@@ -228,7 +216,6 @@ Block **get_segregated_starts() {
 Block **get_segregated_starts_free() {
   return segregated_starts_free;
 }
-
 
 void reset_heap() {
   // Already reset.
@@ -245,7 +232,7 @@ void reset_heap() {
   if (search_mode == search_mode_enum::free_list) {
     heap_start_free = nullptr;
     top_free = nullptr;
-    *free_list_size = 0;
+    free_list_size = 0;
   }
   if (search_mode == search_mode_enum::segregated_list) {
     heap_start_free = nullptr;
@@ -255,14 +242,13 @@ void reset_heap() {
       segregated_tops[i] = nullptr;
       segregated_tops_free[i] = nullptr;
       segregated_starts_free[i] = nullptr;
-      *free_lists_size[i] = 0;
+      free_lists_size[i] = 0;
     }
   }
   find_block = nullptr;
   split = nullptr;
   coalesce = nullptr;
   free_f = nullptr;
-  list_allocate = nullptr;
 }
 
 void init(search_mode_enum mode) {
@@ -275,33 +261,28 @@ void init(search_mode_enum mode) {
       split = split_default;
       coalesce = coalesce_default;
       free_f = free_default;
-      list_allocate = list_allocate_default;
       break;
     case search_mode_enum::next_fit:
       find_block = next_fit_search;
       split = split_default;
       coalesce = coalesce_default;
       free_f = free_default;
-      list_allocate = list_allocate_default;
       break;
     case search_mode_enum::best_fit:
       find_block = best_fit_search;
       split = split_default;
       coalesce = coalesce_default;
       free_f = free_default;
-      list_allocate = list_allocate_default;
       break;
     case search_mode_enum::free_list:
       find_block = free_list_search;
       split = split_free_list;
       coalesce = coalesce_free_list;
       free_f = free_free_list;
-      list_allocate = list_allocate_default;
       break;
     case search_mode_enum::segregated_list:
       find_block = segregated_fit_search;
       free_f = free_segregated;
-      list_allocate = list_allocate_segregated;
       break;
   }
 }
@@ -339,13 +320,16 @@ Block *free_list_search(size_t size) {
       continue;
     }
 
-    //removing from list
+    //removing from free list
     if (block->prev_free)
       block->prev_free->next_free = block->next_free;
-
-    if (block->next_free)
+    else if (block->next_free)
       block->next_free->prev_free = block->prev_free;
-    --(*free_list_size);
+    else {
+      heap_start_free = nullptr;
+      top_free = nullptr;
+    }
+    --free_list_size;
     // Found the block:
     return list_allocate(block, size);
   }
@@ -403,7 +387,23 @@ void free(word_t *data) {
 }
 
 size_t get_free_list_size() {
-  return *free_list_size;
+  return free_list_size;
+}
+
+
+/**
+ * Allocates a block from the list, splitting if needed.
+ */
+Block *list_allocate(Block *block, size_t size) {
+// Split the larger block, reusing the free part.
+  if (can_split(block, size)) {
+    block = split(block, size);
+  }
+
+  block->used = true;
+  block->size = size;
+
+  return block;
 }
 
 /**

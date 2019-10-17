@@ -86,13 +86,13 @@ static Block *segregated_starts_free[] = {
     nullptr,   // any > 128
 };
 
-static size_t *free_lists_size[] = {
-    (size_t *) malloc(sizeof(size_t)),   //   8
-    (size_t *) malloc(sizeof(size_t)),   //  16
-    (size_t *) malloc(sizeof(size_t)),   //  32
-    (size_t *) malloc(sizeof(size_t)),   //  64
-    (size_t *) malloc(sizeof(size_t)),   // 128
-    (size_t *) malloc(sizeof(size_t)),   // any > 128
+static size_t free_lists_size[] = {
+    0,   //   8
+    0,   //  16
+    0,   //  32
+    0,   //  64
+    0,   // 128
+    0,   // any > 128
 };
 
 static Block *heap_start = nullptr;
@@ -100,27 +100,49 @@ static auto top = heap_start;
 static Block *heap_start_free = nullptr;
 static auto top_free = heap_start_free;
 static size_t heap_size = 0;
-static size_t *free_list_size = (size_t *) malloc(sizeof(size_t));
+static size_t free_list_size = 0;
+/**
+ * Mode for searching a free block.
+ */
+enum struct search_mode_enum {
+  first_fit,
+  next_fit,
+  best_fit,
+  free_list,
+  segregated_list,
+};
 
+/**
+ * Current search mode.
+ */
+static auto search_mode = search_mode_enum::first_fit;
+
+/**
+ * Previously found block. Updated in `next_fit`.
+ */
+static auto search_start = heap_start;
 
 /**
  * Tries to find a block that fits.
  */
 static Block *(*find_block)(size_t size);
 
-
+/**
+ * Splits the block on two, returns the pointer to the smaller sub-block.
+ */
 static Block *(*split)(Block *block, size_t size);
 
-static Block *(*coalesce)(Block *block);
-
-static void (*free_f)(word_t *data);
-
-static Block *(*list_allocate)(Block *block, size_t size);
 
 /**
- * Previously found block. Updated in `next_fit`.
+ * Coalesces two adjacent blocks.
  */
-static auto search_start = heap_start;
+static Block *(*coalesce)(Block *block);
+
+
+/**
+ * Internal free call.
+ */
+static void (*free_f)(word_t *data);
 
 /**
 * Allocates a block of memory of (at least) `size` bytes.
@@ -150,9 +172,14 @@ inline size_t calc_alloc_size(size_t size);
 
 
 /**
- * Segregated fit algorithm.
+ * Whether this block can be split.
  */
-Block *segregated_fit_search(size_t size);
+inline bool can_split(Block *block, size_t size);
+
+/**
+ * Whether we should merge this block.
+ */
+inline bool can_coalesce(Block *block);
 
 Block *get_header(word_t *data);
 
@@ -160,37 +187,12 @@ Block *request_mem_from_OS(size_t size);
 
 void free(word_t *data);
 
+/**
+ * Allocates a block from the list, splitting if needed.
+ */
+Block *list_allocate(Block *block, size_t size);
+
 Block *first_fit_search(size_t size);
-
-const Block *get_search_start();
-
-size_t get_free_list_size();
-
-/**
- * Mode for searching a free block.
- */
-enum struct search_mode_enum {
-  first_fit,
-  next_fit,
-  best_fit,
-  free_list,
-  segregated_list,
-};
-
-/**
- * Current search mode.
- */
-static auto search_mode = search_mode_enum::first_fit;
-
-/**
- * Reset the heap to the original position.
- */
-void reset_heap();
-
-/**
- * Initializes the heap, and the search mode.
- */
-void init(search_mode_enum mode);
 
 /**
  * Next-fit algorithm.
@@ -202,34 +204,28 @@ Block *next_fit_search(size_t size);
 
 Block *best_fit_search(size_t size);
 
-/**
- * Splits the block on two, returns the pointer to the smaller sub-block.
- */
-
+Block *free_list_search(size_t size);
 
 /**
- * Whether this block can be split.
+ * Segregated fit algorithm.
  */
-inline bool can_split(Block *block, size_t size);
+Block *segregated_fit_search(size_t size);
 
 /**
- * Allocates a block from the list, splitting if needed.
- */
+ * Reset the heap to the original position.
+ */void reset_heap();
 
 /**
- * Whether we should merge this block.
+ * Initializes the heap, and the search mode.
  */
-inline bool can_coalesce(Block *block);
+void init(search_mode_enum mode);
 
 Block **get_segregated_starts();
 
 Block **get_segregated_starts_free();
 
-/**
- * Coalesces two adjacent blocks.
- */
+const Block *get_search_start();
 
-
-Block *free_list_search(size_t size);
+size_t get_free_list_size();
 
 #endif //UNTITLED_ALLOCATOR_H
