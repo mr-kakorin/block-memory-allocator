@@ -9,7 +9,6 @@
  * Machine word size. Depending on the architecture,
  * can be 4 or 8 bytes.
  */
-#include <cstdint>
 #include <unistd.h>   // for sbrk
 #include <utility>
 
@@ -51,19 +50,72 @@ struct Block {
 
 };
 
+static Block *segregated_starts[] = {
+    nullptr,   //   8
+    nullptr,   //  16
+    nullptr,   //  32
+    nullptr,   //  64
+    nullptr,   // 128
+    nullptr,   // any > 128
+};
+
+static Block *segregated_tops[] = {
+    nullptr,   //   8
+    nullptr,   //  16
+    nullptr,   //  32
+    nullptr,   //  64
+    nullptr,   // 128
+    nullptr,   // any > 128
+};
+
+static Block *segregated_tops_free[] = {
+    nullptr,   //   8
+    nullptr,   //  16
+    nullptr,   //  32
+    nullptr,   //  64
+    nullptr,   // 128
+    nullptr,   // any > 128
+};
+
+static Block *segregated_starts_free[] = {
+    nullptr,   //   8
+    nullptr,   //  16
+    nullptr,   //  32
+    nullptr,   //  64
+    nullptr,   // 128
+    nullptr,   // any > 128
+};
+
+static size_t *free_lists_size[] = {
+    (size_t *) malloc(sizeof(size_t)),   //   8
+    (size_t *) malloc(sizeof(size_t)),   //  16
+    (size_t *) malloc(sizeof(size_t)),   //  32
+    (size_t *) malloc(sizeof(size_t)),   //  64
+    (size_t *) malloc(sizeof(size_t)),   // 128
+    (size_t *) malloc(sizeof(size_t)),   // any > 128
+};
+
 static Block *heap_start = nullptr;
 static auto top = heap_start;
-
 static Block *heap_start_free = nullptr;
 static auto top_free = heap_start_free;
 static size_t heap_size = 0;
-static size_t free_list_size = 0;
+static size_t *free_list_size = (size_t *) malloc(sizeof(size_t));
 
 
 /**
  * Tries to find a block that fits.
  */
 static Block *(*find_block)(size_t size);
+
+
+static Block *(*split)(Block *block, size_t size);
+
+static Block *(*coalesce)(Block *block);
+
+static void (*free_f)(word_t *data);
+
+static Block *(*list_allocate)(Block *block, size_t size);
 
 /**
  * Previously found block. Updated in `next_fit`.
@@ -81,6 +133,12 @@ word_t *alloc(size_t size);
 inline size_t align(size_t n);
 
 /**
+ * Gets the bucket number from segregatedLists
+ * based on the size.
+ */
+inline int get_bucket(size_t size);
+
+/**
  * Returns total allocation size, reserving in addition the space for
  * the Block structure (object header + first data word).
  *
@@ -89,6 +147,12 @@ inline size_t align(size_t n);
  * only one word, it's fully in the Block struct.
  */
 inline size_t calc_alloc_size(size_t size);
+
+
+/**
+ * Segregated fit algorithm.
+ */
+Block *segregated_fit_search(size_t size);
 
 Block *get_header(word_t *data);
 
@@ -110,6 +174,7 @@ enum struct search_mode_enum {
   next_fit,
   best_fit,
   free_list,
+  segregated_list,
 };
 
 /**
@@ -140,7 +205,7 @@ Block *best_fit_search(size_t size);
 /**
  * Splits the block on two, returns the pointer to the smaller sub-block.
  */
-Block *split(Block *block, size_t size);
+
 
 /**
  * Whether this block can be split.
@@ -150,17 +215,20 @@ inline bool can_split(Block *block, size_t size);
 /**
  * Allocates a block from the list, splitting if needed.
  */
-Block *list_allocate(Block *block, size_t size);
 
 /**
  * Whether we should merge this block.
  */
 inline bool can_coalesce(Block *block);
 
+Block **get_segregated_starts();
+
+Block **get_segregated_starts_free();
+
 /**
  * Coalesces two adjacent blocks.
  */
-Block *coalesce(Block *block);
+
 
 Block *free_list_search(size_t size);
 

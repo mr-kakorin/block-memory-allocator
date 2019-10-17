@@ -97,5 +97,31 @@ int main() {
   assert(get_free_list_size() == 0);
   assert(get_header(v1) == get_header(v2));
 
+
+  init(search_mode_enum::segregated_list);
+
+  auto s1 = alloc(3);
+  auto s2 = alloc(8);
+
+  assert(get_header(s1) == get_segregated_starts()[0]);
+  assert(get_header(s2) == get_segregated_starts()[0]->next);
+
+  auto s3 = alloc(16);
+  assert(get_header(s3) == get_segregated_starts()[1]);
+
+  auto s4 = alloc(8);
+  assert(get_header(s4) == get_segregated_starts()[0]->next->next);
+
+  auto s5 = alloc(32);
+  assert(get_header(s5) == get_segregated_starts()[3]);
+
+  free(s1);
+
+  auto s6 = alloc(5);
+  assert(get_header(s6) == get_header(s1));
+  free(s2);
+  free(s3);
+
+  puts("\nAll assertions passed!\n");
   return 0;
 }
